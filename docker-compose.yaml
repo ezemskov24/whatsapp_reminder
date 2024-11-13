@@ -1,0 +1,65 @@
+services:
+  src:
+    container_name: whatsapp_server
+    build:
+      context: .
+      dockerfile: src/Dockerfile
+    ports:
+      - "8000:8000"
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    networks:
+      - whatsapp_reminder
+
+  postgres:
+    container_name: reminder_db
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASS}
+    ports:
+      - '5432:5432'
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - whatsapp_reminder
+
+  redis:
+    container_name: redis
+    image: redis:latest
+    ports:
+      - '6379:6379'
+    networks:
+      - whatsapp_reminder
+
+  celery:
+    container_name: celery_worker
+    build:
+      context: .
+      dockerfile: src/Dockerfile
+    command: celery -A celery_config.celery_app worker --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - postgres
+    restart: always
+    networks:
+      - whatsapp_reminder
+
+volumes:
+  postgres_data:
+
+networks:
+  whatsapp_reminder:
+    driver: bridge
